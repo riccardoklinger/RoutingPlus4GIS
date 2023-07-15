@@ -81,22 +81,21 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'myscript'
+        return 'routing'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('My Script')
+        return self.tr(self.name())
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to. This string
         should be localised.
         """
-        return self.tr('Example scripts')
-
+        return self.tr(self.groupId())
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to. This
@@ -105,7 +104,7 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         contain lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'examplescripts'
+        return 'Algorithms for RoutingPlus'
 
     def shortHelpString(self):
         """
@@ -113,7 +112,7 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        return self.tr("Example algorithm short description")
+        return self.tr("Example algorithm short description for routing")
 
     def initAlgorithm(self, config=None):
         """
