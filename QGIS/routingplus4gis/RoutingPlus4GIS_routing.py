@@ -149,9 +149,10 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        url = 'https://sg.geodatenzentrum.de/web_ors__17e2e679-f31a-e5b9-7b70-4d022cfa13#/v2/directions/driving-car/geojson' 
+        url = 'https://sg.geodatenzentrum.de/web_ors__17e2e679-f31a-e5b9-7b70-4d022cfa13d6/v2/directions/driving-car/geojson' 
         h = {'Content-Type': 'application/json; charset=utf-8',
-                   'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
+             'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
+        
         d = {"coordinates":[[8.83098,49.89201],[8.92367,49.8884]]}
         response = requests.post(url, data=d, headers=h) 
         #print("Status Code", response.status_code)
