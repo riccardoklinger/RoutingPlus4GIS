@@ -21,24 +21,29 @@
  *                                                                         *
  ***************************************************************************/
 """
-
-__author__ = 'Riccardo Klinger'
-__date__ = '2023-07-15'
-__copyright__ = '(C) 2023 by Riccardo Klinger'
-
-# This will get replaced with a git SHA1 when you do a git archive
-
-__revision__ = '$Format:%H$'
-
+"""
+***************************************************************************
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+***************************************************************************
+"""
+import requests
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
+                       QgsProcessingException,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFeatureSink)
+                       QgsProcessingParameterFeatureSink,
+                       QgsProcessingParameterString)
+from qgis import processing
 
 
-class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
+class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
     creates a new identical one.
@@ -56,70 +61,17 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    OUTPUT = 'OUTPUT'
     INPUT = 'INPUT'
+    OUTPUT = 'OUTPUT'
 
-    def initAlgorithm(self, config):
+    def tr(self, string):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
+        Returns a translatable string with the self.tr() function.
         """
+        return QCoreApplication.translate('Processing', string)
 
-        # We add the input vector features source. It can have any kind of
-        # geometry.
-        self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
-            )
-        )
-
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
-        self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.OUTPUT,
-                self.tr('Output layer')
-            )
-        )
-
-    def routingAlgorithm(self, parameters, context, feedback):
-        """
-        Here is where the processing itself takes place.
-        """
-
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
-
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
-
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
-
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
-
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        return {self.OUTPUT: dest_id}
+    def createInstance(self):
+        return ExampleProcessingAlgorithm()
 
     def name(self):
         """
@@ -129,21 +81,21 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'routing'
+        return 'myscript'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr(self.name())
+        return self.tr('My Script')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to. This string
         should be localised.
         """
-        return self.tr(self.groupId())
+        return self.tr('Example scripts')
 
     def groupId(self):
         """
@@ -153,10 +105,73 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         contain lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Algorithms for RoutingPlus'
+        return 'examplescripts'
 
-    def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+    def shortHelpString(self):
+        """
+        Returns a localised short helper string for the algorithm. This string
+        should provide a basic description about what the algorithm does and the
+        parameters and outputs associated with it..
+        """
+        return self.tr("Example algorithm short description")
 
-    def createInstance(self):
-        return RoutingPlus4GISRouting()
+    def initAlgorithm(self, config=None):
+        """
+        Here we define the inputs and output of the algorithm, along
+        with some other properties.
+        """
+
+        # We add the input vector features source. It can have any kind of
+        # geometry.
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.tr('Input layer'),
+                "this is input"
+            )
+        )
+
+        # We add a feature sink in which to store our processed features (this
+        # usually takes the form of a newly created vector layer when the
+        # algorithm is run in QGIS).
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.tr('output layer'),
+                "this is output"
+            )
+        )
+
+    def processAlgorithm(self, parameters, context, feedback):
+        feedback.pushInfo('This is a 1 log message')
+        """
+        Here is where the processing itself takes place.
+        """
+
+        # Retrieve the feature source and sink. The 'dest_id' variable is used
+        # to uniquely identify the feature sink, and must be included in the
+        # dictionary returned by the processAlgorithm function.
+        url = 'https://sg.geodatenzentrum.de/web_ors__17e2e679-f31a-e5b9-7b70-4d022cfa13#/v2/directions/driving-car/geojson' 
+        h = {'Content-Type': 'application/json; charset=utf-8',
+                   'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
+        d = {"coordinates":[[8.83098,49.89201],[8.92367,49.8884]]}
+        response = requests.post(url, data=d, headers=h) 
+        #print("Status Code", response.status_code)
+        print("JSON Response ", response.text)
+        feedback.pushInfo(response.text)
+
+        # Send some information to the user
+        feedback.pushInfo(f'CRS is 234')
+
+        # If sink was not created, throw an exception to indicate that the algorithm
+        # encountered a fatal error. The exception text can be any string, but in this
+        # case we use the pre-built invalidSinkError method to return a standard
+        # helper text for when a sink cannot be evaluated
+        
+        
+
+        # Return the results of the algorithm. In this case our only result is
+        # the feature sink which contains the processed features, but some
+        # algorithms may return multiple feature sinks, calculated numeric
+        # statistics, etc. These should all be included in the returned
+        # dictionary, with keys matching the feature corresponding parameter
+        # or output names.
+        return {self.OUTPUT: "ss_id"}
