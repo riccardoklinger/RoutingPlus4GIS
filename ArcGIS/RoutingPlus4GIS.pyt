@@ -1,15 +1,29 @@
 # -*- coding: utf-8 -*-
 
-import os
+"""
+/***************************************************************************
+ RoutingPlus4GIS
+                                 A QGIS plugin
+ RoutingPlus implememtation for QGIS and ArcGIS
+                              -------------------
+        begin                : 2023-07-15
+        copyright            : (C) 2023 by Riccardo Klinger
+        email                : riccardo.klinger@gmail.com
+ ***************************************************************************/
+
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+"""
+
 import arcpy
 import requests
-import configparser
-
-def loadCOnfig():
-    config = configparser.RawConfigParser()
-    config.read(os.path.join(os.path.dirname(__file__), '../CONFIG.cfg'))
-    uuid = config.get('Authorization', 'UUID')
-    return uuid
+from support import getUUID
 
 class Toolbox(object):
     def __init__(self):
@@ -52,7 +66,7 @@ class Routing(object):
     def execute(self, parameters, messages):
         """The source code of the tool."""
         #print the uuid:
-        uuid = loadCOnfig()
+        uuid = getUUID()
         messages.addMessage(uuid)
         return
 

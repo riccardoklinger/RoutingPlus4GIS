@@ -21,16 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-"""
-***************************************************************************
-*                                                                         *
-*   This program is free software; you can redistribute it and/or modify  *
-*   it under the terms of the GNU General Public License as published by  *
-*   the Free Software Foundation; either version 2 of the License, or     *
-*   (at your option) any later version.                                   *
-*                                                                         *
-***************************************************************************
-"""
+import configparser
 import requests
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
@@ -41,6 +32,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterString)
 from qgis import processing
+import os
+from support import getUUID
 
 
 class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
@@ -138,6 +131,7 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
                 "this is output"
             )
         )
+    
 
     def processAlgorithm(self, parameters, context, feedback):
         feedback.pushInfo('This is a 1 log message')
@@ -148,7 +142,8 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        url = 'https://sg.geodatenzentrum.de/web_ors__17e2e679-f31a-e5b9-7b70-4d022cfa13d6/v2/directions/driving-car/geojson' 
+        uuid = getUUID()
+        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/driving-car/geojson' 
         h = {'Content-Type': 'application/json; charset=utf-8',
              'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
         
