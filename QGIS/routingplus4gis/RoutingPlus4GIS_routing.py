@@ -36,7 +36,7 @@ import os
 from support import getUUID
 
 
-class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
+class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
     creates a new identical one.
@@ -64,7 +64,7 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return ExampleProcessingAlgorithm()
+        return RoutingPlus4GISRouting()
 
     def name(self):
         """
@@ -133,7 +133,7 @@ class ExampleProcessingAlgorithm(QgsProcessingAlgorithm):
         )
     
 
-    def processAlgorithm(self, parameters, context, feedback):
+    def routingAlgorithm(self, parameters, context, feedback):
         feedback.pushInfo('This is a 1 log message')
         """
         Here is where the processing itself takes place.
