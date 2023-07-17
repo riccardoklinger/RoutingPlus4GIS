@@ -54,9 +54,10 @@ class RoutingPlus4GISProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(RoutingPlus4GISRouting())
-        # add additional algorithms here
         self.addAlgorithm(RoutingPlus4GISIsochrones())
+        # self.addAlgorithm(RoutingPlus4GISRouting())
+        # add additional algorithms here
+        #self.addAlgorithm(RoutingPlus4GISIsochrones())
 
     def id(self):
         """
