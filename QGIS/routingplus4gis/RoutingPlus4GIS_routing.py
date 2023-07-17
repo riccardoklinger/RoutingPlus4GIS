@@ -9,13 +9,28 @@
 ***************************************************************************
 """
 
-from qgis.PyQt.QtCore import QCoreApplication
+#from QGIS.routingplus4gis.support import getUUID
+
+import requests
+import configparser
+import os
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
+                       QgsFeature,
+                       QgsGeometry,
+                       QgsField,
+                       QgsFields,
+                       QgsPoint,
+                       QgsPointXY,
+                       QgsWkbTypes,
                        QgsProcessingException,
+                       QgsCoordinateReferenceSystem,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFeatureSink)
+                       QgsProcessingParameterFeatureSink,
+                       QgsProcessingParameterString,
+                       QgsProcessingParameterNumber)
 from qgis import processing
 
 
@@ -37,8 +52,19 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    INPUT = 'INPUT'
+    INPUT_X = 'INPUT_COORDINATE_X'
+    INPUT_Y = "INPUT_COORDINATE_Y"
+    INPUT_X2 = "INPUT_COORDINATE_X2"
+    INPUT_Y2 = "INPUT_COORDINATE_Y2"
     OUTPUT = 'OUTPUT'
+
+    def getUUID(self):
+        uuid = os.environ.get('UUID')
+        if not uuid:
+            config = configparser.RawConfigParser()
+            config.read('CONFIG.cfg')
+            uuid = config.get('Authorization', 'UUID')
+        return uuid
 
     def tr(self, string):
         """
@@ -100,10 +126,34 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         # We add the input vector features source. It can have any kind of
         # geometry.
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+            QgsProcessingParameterNumber(
+                name = self.INPUT_X,
+                description = self.tr('Input Längengrad VON'),
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue = 8.5,
+                optional = True
+            )
+        )
+        
+
+        # We add a feature sink in which to store our processed features (this
+        # usually takes the form of a newly created vector layer when the
+        # algorithm is run in QGIS).
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.INPUT_Y,
+                self.tr('Input Breitengrad VON'),
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue = 50.1,
+                optional = True            )
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.INPUT_X2,   
+                self.tr('Input Längengrad NACH'),
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue = 9.1,
+                optional = True
             )
         )
 
@@ -111,9 +161,29 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
         self.addParameter(
+            QgsProcessingParameterNumber(
+                self.INPUT_Y2,
+                self.tr('Input Breitengrad NACH'),
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue = 48.5,
+                optional = True
+            )
+        )
+    
+
+        # We add a feature sink in which to store our processed features (this
+        # usually takes the form of a newly created vector layer when the
+        # algorithm is run in QGIS).
+        #self.addParameter(
+        #    QgsProcessingParameterFeatureSink(
+        #        self.OUTPUT,
+        #        self.tr('Output Route layer')
+        #    )
+        #)
+        self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr('Output layer')
+                self.tr('Route layer')
             )
         )
 
@@ -122,78 +192,53 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         Here is where the processing itself takes place.
         """
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(
+        coord_x = self.parameterAsDouble(
             parameters,
-            self.INPUT,
+            self.INPUT_X,
             context
         )
-
-        # If source was not found, throw an exception to indicate that the algorithm
-        # encountered a fatal error. The exception text can be any string, but in this
-        # case we use the pre-built invalidSourceError method to return a standard
-        # helper text for when a source cannot be evaluated
-        if source is None:
-            raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
-
+        coord_y = self.parameterAsDouble(
+            parameters,
+            self.INPUT_Y,
+            context
+        )
+        coord_x2 = self.parameterAsDouble(
+            parameters,
+            self.INPUT_X2,
+            context
+        )
+        coord_y2 = self.parameterAsDouble(
+            parameters,
+            self.INPUT_Y2,
+            context
+        )
+        feedback.pushInfo(str(coord_x))
+        uuid = self.getUUID()
+        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/driving-car/geojson' 
+        h = {'Content-Type': 'application/json; charset=utf-8',
+             'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
+        
+        d = '{"coordinates":[['+str(coord_x)+ ','+str(coord_y) + '],[' +str(coord_x2)+','+ str(coord_y2)+']]}'
+        response = requests.post(url, data=d, headers=h) 
+        feedback.pushInfo(str(response.json()["features"][0]))
+        fields = QgsFields()
+        fields.append(QgsField("distance", QVariant.Double))
+        fields.append(QgsField("dtration", QVariant.Double))
         (sink, dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT,
             context,
-            source.fields(),
-            source.wkbType(),
-            source.sourceCrs()
+            fields,
+            QgsWkbTypes.LineString,
+            QgsCoordinateReferenceSystem(4326)
         )
-
-        # Send some information to the user
-        feedback.pushInfo(f'CRS is {source.sourceCrs().authid()}')
-
-        # If sink was not created, throw an exception to indicate that the algorithm
-        # encountered a fatal error. The exception text can be any string, but in this
-        # case we use the pre-built invalidSinkError method to return a standard
-        # helper text for when a sink cannot be evaluated
-        if sink is None:
-            raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT))
-
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
-
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
-
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
-
-        # To run another Processing algorithm as part of this algorithm, you can use
-        # processing.run(...). Make sure you pass the current context and feedback
-        # to processing.run to ensure that all temporary layer outputs are available
-        # to the executed algorithm, and that the executed algorithm can send feedback
-        # reports to the user (and correctly handle cancellation and progress reports!)
-        if False:
-            buffered_layer = processing.run("native:buffer", {
-                'INPUT': dest_id,
-                'DISTANCE': 1.5,
-                'SEGMENTS': 5,
-                'END_CAP_STYLE': 0,
-                'JOIN_STYLE': 0,
-                'MITER_LIMIT': 2,
-                'DISSOLVE': False,
-                'OUTPUT': 'memory:'
-            }, context=context, feedback=feedback)['OUTPUT']
-
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
+        fet = QgsFeature()
+        point_list = [QgsPoint(pt[0],pt[1])  for pt in response.json()["features"][0]["geometry"]['coordinates']]        
+        geom = QgsGeometry.fromPolyline(point_list)
+        fet.setGeometry(geom)
+        fet.setAttributes([
+            response.json()["features"][0]["properties"]["summary"]["distance"],
+            response.json()["features"][0]["properties"]["summary"]["duration"],
+        ])
+        sink.addFeature(fet, QgsFeatureSink.FastInsert)
         return {self.OUTPUT: dest_id}

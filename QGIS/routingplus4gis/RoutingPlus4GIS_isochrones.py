@@ -8,7 +8,8 @@
 *                                                                         *
 ***************************************************************************
 """
-
+import configparser
+import os
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
@@ -39,6 +40,14 @@ class RoutingPlus4GISIsochrones(QgsProcessingAlgorithm):
 
     INPUT = 'INPUT'
     OUTPUT = 'OUTPUT'
+
+    def getUUID():
+        uuid = os.environ.get('UUID')
+        if not uuid:
+            config = configparser.RawConfigParser()
+            config.read('CONFIG.cfg')
+            uuid = config.get('Authorization', 'UUID')
+        return uuid
 
     def tr(self, string):
         """
