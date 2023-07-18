@@ -23,6 +23,7 @@ from qgis.core import (QgsProcessing,
                        QgsFields,
                        QgsPoint,
                        QgsProcessingParameterPoint,
+                       QgsProcessingParameterEnum,
                        QgsPointXY,
                        QgsProject,
                        QgsWkbTypes,
@@ -57,6 +58,7 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
 
     INPUT_POINT_A = 'StartPoint'
     INPUT_POINT_B = 'EndPoint'
+    PROFILE = 'Profile'
     OUTPUT = 'OUTPUT'
 
     def getUUID(self):
@@ -130,26 +132,25 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
             QgsProcessingParameterPoint(
                 self.INPUT_POINT_A,
                 self.tr('Input VON x,y'),
-                optional = True
+                optional = False
             )
         )
         self.addParameter(
             QgsProcessingParameterPoint(
                 self.INPUT_POINT_B,
                 self.tr('Input NACH x,y'),
-                optional = True
+                optional = False
             )
         )
-
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
-        #self.addParameter(
-        #    QgsProcessingParameterFeatureSink(
-        #        self.OUTPUT,
-        #        self.tr('Output Route layer')
-        #    )
-        #)
+        self.addParameter(
+            QgsProcessingParameterEnum(
+            self.PROFILE,
+            self.tr('Geschwindigkeitsprofil'),
+            options=["Auto", "Schwerlastverkehr", "Fahrrad","Fußgänger","Rollstuhl"],
+            defaultValue=0,
+            optional=False
+            )
+        )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
@@ -172,6 +173,17 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
             self.INPUT_POINT_B,
             context
         )
+        profile = self.parameterAsEnum(parameters, self.PROFILE, context)
+        if profile == 0:
+            profil = "driving-car"
+        if profile == 1:
+            profil = "driving-hgv"
+        if profile == 2:
+            profil = 'cycling-regular'
+        if profile == 3:
+            profil = 'foot-walking'
+        if profile == 4:
+            profil = "wheelchair"
         crs = self.parameterAsPointCrs(
             parameters,
             self.INPUT_POINT_A,
@@ -184,7 +196,8 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         pointB4326 = transform.transform(pointB)
         feedback.pushInfo('Berechne Route von ' + str(pointA4326) + 'nach ' + str(pointB4326))
         uuid = self.getUUID()
-        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/driving-car/geojson' 
+        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/{}/geojson'.format(profil)
+        feedback.pushInfo(url)
         h = {'Content-Type': 'application/json; charset=utf-8',
              'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
         
@@ -192,6 +205,7 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         response = requests.post(url, data=d, headers=h) 
         feedback.pushInfo(response.text)
         fields = QgsFields()
+        fields.append(QgsField("profile", QVariant.String))
         fields.append(QgsField("distance", QVariant.Double))
         fields.append(QgsField("duration", QVariant.Double))
         (sink, destId) = self.parameterAsSink(
@@ -207,6 +221,7 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         geom = QgsGeometry.fromPolyline(pointList)
         fet.setGeometry(geom)
         fet.setAttributes([
+            profil,
             response.json()["features"][0]["properties"]["summary"]["distance"],
             response.json()["features"][0]["properties"]["summary"]["duration"],
         ])

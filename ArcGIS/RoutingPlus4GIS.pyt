@@ -48,21 +48,32 @@ class Routing(object):
         """Define parameter definitions"""
         param0 = arcpy.Parameter(
             displayName='Wegpunkte der Route',
-            name='param0',
+            name='waypoints',
             datatype='GPFeatureRecordSetLayer',
+            parameterType='Required',
+            direction='Input')
+        param1 = arcpy.Parameter(
+            displayName='Geschwindigkeitsprofile',
+            name='profile',
+            datatype='GPString',
             parameterType='Required',
             direction='Input')
         
         paramX =  arcpy.Parameter(
             displayName='der Routenlayer',
-            name='paramX',
+            name='route',
             datatype='DEFeatureClass',
             parameterType='Required',
             direction='Output')
         param0.value = os.path.join(os.path.dirname(__file__), 'layer',
                                 'routing.lyrx')
         param0.filter.list = ["Point"]
-        params = [param0,paramX]
+        param1.filter.type="ValueList"
+        param1.filter.list=["Auto", "Schwerlastverkehr", "Fahrrad","Fußgänger","Rollstuhl"]
+        param1.value = "Auto"
+        #param1.filter.list=["driving-car", "driving-hgv", "cycling-regular","foot-walking","wheelchair"]
+        
+        params = [param0,param1,paramX]
         return params
 
     def isLicensed(self):
@@ -89,22 +100,19 @@ class Routing(object):
             parameters[0].clearMessage()
         return
     
-    def constructFeatureClass(self, fc, jsonIN):
+    def constructFeatureClass(self, fc, jsonIN, profile,  dura, dist):
         point = arcpy.Point()
         array = arcpy.Array()
-        featureList = []
-        cursor = arcpy.InsertCursor(fc)
-        feat = cursor.newRow()
+       # featureList = []
+        #feat = cursor.newRow()
+        
         for pt in jsonIN:
             point.X = pt[0]
             point.Y = pt[1]
             array.add(point)
         polyline = arcpy.Polyline(array)
-        featureList.append(polyline)
-        feat.shape = polyline
-        cursor.insertRow(feat)
-        del feat
-        del cursor
+        with arcpy.da.InsertCursor(fc, ["profile", "distance", "duration", "SHAPE@"]) as cursor:
+            cursor.insertRow((profile, dist, dura, polyline))
         return fc
     
 
@@ -116,7 +124,17 @@ class Routing(object):
         messages.addMessage("Zugriff mittels folgender UUID: " + uuid)
         messages.addMessage(type(parameters[0].value))
         wayPointsIn = parameters[0].value
-        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/driving-car/geojson' 
+        if parameters[1].valueAsText == 'Auto':
+            profile = "driving-car"
+        if parameters[1].valueAsText == "Schwerlastverkehr":
+            profile = "driving-hgv"
+        if parameters[1].valueAsText == "Fahrrad":
+            profile = 'cycling-regular'
+        if parameters[1].valueAsText == "Fußgänger":
+            profile = 'foot-walking'
+        if parameters[1].valueAsText == 'Rollstuhl':
+            profile = "wheelchair"
+        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/{}/geojson'.format(profile)
         d = '{"coordinates":['
         with arcpy.da.SearchCursor(wayPointsIn,'SHAPE@') as cursor:
             for row in cursor:
@@ -131,12 +149,21 @@ class Routing(object):
         h = {'Content-Type': 'application/json; charset=utf-8',
              'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
         response = requests.post(url, data=d, headers=h)
-        ws, fc_name = os.path.split(parameters[1].valueAsText)
+        ws, fc_name = os.path.split(parameters[2].valueAsText)
         fc = arcpy.management.CreateFeatureclass(out_path=ws, 
                                                  out_name=fc_name, 
                                                  geometry_type="Polyline", 
                                                  spatial_reference=arcpy.SpatialReference(4326))
-        parameters[1]=self.constructFeatureClass(fc,response.json()["features"][0]["geometry"]['coordinates'])
+        arcpy.AddField_management(fc, "profile", "TEXT", field_length = 50)
+        arcpy.AddField_management(fc, "duration", "LONG")
+        arcpy.AddField_management(fc, "distance", "LONG")
+        parameters[2]=self.constructFeatureClass(fc,
+                                                response.json()["features"][0]["geometry"]['coordinates'],
+                                                parameters[1].valueAsText,
+                                                response.json()["features"][0]["properties"]["summary"]["duration"],
+                                                response.json()["features"][0]["properties"]["summary"]["distance"],
+                                                )
+
         messages.addMessage(response.text)
         return
 

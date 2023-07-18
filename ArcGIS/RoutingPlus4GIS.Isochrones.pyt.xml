@@ -1,2 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="de"><Esri><CreaDate>20230716</CreaDate><CreaTime>00575300</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<?xml version="1.0"?>
+<metadata xml:lang="de"><Esri><CreaDate>20230716</CreaDate><CreaTime>00575300</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><ModDate>20230718</ModDate><ModTime>15135700</ModTime><scaleRange><minScale>150000000</minScale><maxScale>5000</maxScale></scaleRange><ArcGISProfile>ItemDescription</ArcGISProfile></Esri><tool name="Isochrones" displayname="Isochrones" toolboxalias="RoutingPlus4GIS" xmlns=""><arcToolboxHelpPath>c:\program files\arcgis\pro\Resources\Help\gp</arcToolboxHelpPath><summary>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;Mit diesem tool können Isochronen für ein Set von Punkten ermittelt werden.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;&lt;/DIV&gt;</summary></tool><dataIdInfo><idCitation><resTitle>Isochrones</resTitle></idCitation><idCredit>Rest API zur Verfügung gestellt von: 
+© Bundesamt für Kartographie und Geodäsie (2023),
+https://sg.geodatenzentrum.de/web_public/Datenquellen_web_ors.pdf
+
+Implementierung des Plugins durch Riccardo Klinger</idCredit><searchKeys><keyword>BKG</keyword><keyword>RoutingPlus</keyword><keyword>Isochronen</keyword></searchKeys></dataIdInfo><distInfo><distributor><distorFormat><formatName>ArcToolbox Tool</formatName></distorFormat></distributor></distInfo><mdHrLv><ScopeCd value="005"/></mdHrLv><mdDateSt Sync="TRUE">20230718</mdDateSt></metadata>
