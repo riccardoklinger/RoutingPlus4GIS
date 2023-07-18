@@ -22,10 +22,13 @@ from qgis.core import (QgsProcessing,
                        QgsField,
                        QgsFields,
                        QgsPoint,
+                       QgsProcessingParameterPoint,
                        QgsPointXY,
+                       QgsProject,
                        QgsWkbTypes,
                        QgsProcessingException,
                        QgsCoordinateReferenceSystem,
+                       QgsCoordinateTransform,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
@@ -52,10 +55,8 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    INPUT_X = 'INPUT_COORDINATE_X'
-    INPUT_Y = "INPUT_COORDINATE_Y"
-    INPUT_X2 = "INPUT_COORDINATE_X2"
-    INPUT_Y2 = "INPUT_COORDINATE_Y2"
+    INPUT_POINT_A = 'StartPoint'
+    INPUT_POINT_B = 'EndPoint'
     OUTPUT = 'OUTPUT'
 
     def getUUID(self):
@@ -126,50 +127,19 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         # We add the input vector features source. It can have any kind of
         # geometry.
         self.addParameter(
-            QgsProcessingParameterNumber(
-                name = self.INPUT_X,
-                description = self.tr('Input Längengrad VON'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue = 8.5,
+            QgsProcessingParameterPoint(
+                self.INPUT_POINT_A,
+                self.tr('Input VON x,y'),
                 optional = True
             )
         )
-        
-
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
         self.addParameter(
-            QgsProcessingParameterNumber(
-                self.INPUT_Y,
-                self.tr('Input Breitengrad VON'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue = 50.1,
-                optional = True            )
-        )
-        self.addParameter(
-            QgsProcessingParameterNumber(
-                self.INPUT_X2,   
-                self.tr('Input Längengrad NACH'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue = 9.1,
+            QgsProcessingParameterPoint(
+                self.INPUT_POINT_B,
+                self.tr('Input NACH x,y'),
                 optional = True
             )
         )
-
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
-        self.addParameter(
-            QgsProcessingParameterNumber(
-                self.INPUT_Y2,
-                self.tr('Input Breitengrad NACH'),
-                type=QgsProcessingParameterNumber.Double,
-                defaultValue = 48.5,
-                optional = True
-            )
-        )
-    
 
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
@@ -192,39 +162,39 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
         Here is where the processing itself takes place.
         """
 
-        coord_x = self.parameterAsDouble(
+        pointA = self.parameterAsPoint(
             parameters,
-            self.INPUT_X,
+            self.INPUT_POINT_A,
             context
         )
-        coord_y = self.parameterAsDouble(
+        pointB = self.parameterAsPoint(
             parameters,
-            self.INPUT_Y,
+            self.INPUT_POINT_B,
             context
         )
-        coord_x2 = self.parameterAsDouble(
+        crs = self.parameterAsPointCrs(
             parameters,
-            self.INPUT_X2,
+            self.INPUT_POINT_A,
             context
         )
-        coord_y2 = self.parameterAsDouble(
-            parameters,
-            self.INPUT_Y2,
-            context
-        )
-        feedback.pushInfo(str(coord_x))
+        #tranform coordinates just to be on the safe side for the API:
+        transform = QgsCoordinateTransform(crs,
+                                   QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
+        pointA4326 = transform.transform(pointA)
+        pointB4326 = transform.transform(pointB)
+        feedback.pushInfo('Berechne Route von ' + str(pointA4326) + 'nach ' + str(pointB4326))
         uuid = self.getUUID()
         url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/directions/driving-car/geojson' 
         h = {'Content-Type': 'application/json; charset=utf-8',
              'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
         
-        d = '{"coordinates":[['+str(coord_x)+ ','+str(coord_y) + '],[' +str(coord_x2)+','+ str(coord_y2)+']]}'
+        d = '{"coordinates":[['+str(pointA4326.x())+ ','+str(pointA4326.y()) + '],[' +str(pointB4326.x())+','+ str(pointB4326.y())+']]}'
         response = requests.post(url, data=d, headers=h) 
-        feedback.pushInfo(str(response.json()["features"][0]))
+        feedback.pushInfo(response.text)
         fields = QgsFields()
         fields.append(QgsField("distance", QVariant.Double))
-        fields.append(QgsField("dtration", QVariant.Double))
-        (sink, dest_id) = self.parameterAsSink(
+        fields.append(QgsField("duration", QVariant.Double))
+        (sink, destId) = self.parameterAsSink(
             parameters,
             self.OUTPUT,
             context,
@@ -233,12 +203,12 @@ class RoutingPlus4GISRouting(QgsProcessingAlgorithm):
             QgsCoordinateReferenceSystem(4326)
         )
         fet = QgsFeature()
-        point_list = [QgsPoint(pt[0],pt[1])  for pt in response.json()["features"][0]["geometry"]['coordinates']]        
-        geom = QgsGeometry.fromPolyline(point_list)
+        pointList = [QgsPoint(pt[0],pt[1])  for pt in response.json()["features"][0]["geometry"]['coordinates']]        
+        geom = QgsGeometry.fromPolyline(pointList)
         fet.setGeometry(geom)
         fet.setAttributes([
             response.json()["features"][0]["properties"]["summary"]["distance"],
             response.json()["features"][0]["properties"]["summary"]["duration"],
         ])
         sink.addFeature(fet, QgsFeatureSink.FastInsert)
-        return {self.OUTPUT: dest_id}
+        return {self.OUTPUT: destId}
