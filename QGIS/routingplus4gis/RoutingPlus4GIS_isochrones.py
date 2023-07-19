@@ -9,14 +9,28 @@
 ***************************************************************************
 """
 import configparser
+import json
 import os
-from qgis.PyQt.QtCore import QCoreApplication
+
+import requests
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
+                       QgsProcessingParameterEnum,
+                       QgsProcessingParameterString,
+                       QgsCoordinateTransform,
+                       QgsCoordinateReferenceSystem,
                        QgsProcessingException,
+                       QgsProject,
+                       QgsJsonUtils,
+                       QgsWkbTypes,
+                       QgsFeature,
+                       QgsField,
+                       QgsFields,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink)
+
 from qgis import processing
 
 
@@ -39,9 +53,13 @@ class RoutingPlus4GISIsochrones(QgsProcessingAlgorithm):
     # calling from the QGIS console.
 
     INPUT = 'INPUT'
+    PROFILE = 'PROFIL'
+    RANGE_TYPE = 'ERREICHBARKEITSTYP'
     OUTPUT = 'OUTPUT'
+    DISTANCES = 'ENTFERNUNGEN'
 
-    def getUUID():
+
+    def getUUID(self):
         uuid = os.environ.get('UUID')
         if not uuid:
             config = configparser.RawConfigParser()
@@ -112,7 +130,34 @@ class RoutingPlus4GISIsochrones(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                [QgsProcessing.TypeVectorPoint],
+                optional=False
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+            self.PROFILE,
+            self.tr('Geschwindigkeitsprofil'),
+            options=["Auto", "Schwerlastverkehr", "Fahrrad","Fußgänger","Rollstuhl"],
+            defaultValue=0,
+            optional=False
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+            self.RANGE_TYPE,
+            self.tr('Erreichbarkeitstyp'),
+            options=["Zeit", "Distanz"],
+            defaultValue=0,
+            optional=False
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.DISTANCES,
+                self.tr("Distance(s) in m oder sekunden"),
+                "300,600,900",
+                optional=False,
             )
         )
 
@@ -139,21 +184,59 @@ class RoutingPlus4GISIsochrones(QgsProcessingAlgorithm):
             self.INPUT,
             context
         )
-
+        profile = self.parameterAsEnum(parameters, self.PROFILE, context)
+        if profile == 0:
+            profil = "driving-car"
+        if profile == 1:
+            profil = "driving-hgv"
+        if profile == 2:
+            profil = 'cycling-regular'
+        if profile == 3:
+            profil = 'foot-walking'
+        if profile == 4:
+            profil = "wheelchair"
+        type = self.parameterAsEnum(parameters, self.RANGE_TYPE, context)
+        if type == 0:
+            typ = "time"
+        if profile == 1:
+            typ = "distance"
+        uuid = self.getUUID()
+        crs = self.parameterAsCrs(
+            parameters,
+            self.INPUT,
+            context
+        )
+        dists = self.parameterAsString(
+            parameters,
+            self.DISTANCES,
+            context
+        )
+        #construct URL
+        url = 'https://sg.geodatenzentrum.de/web_ors__' + uuid + '/v2/isochrones/{}/geojson'.format(profil)
+        feedback.pushInfo(url)
+        feedback.pushInfo(str(crs))
+        h = {'Content-Type': 'application/json; charset=utf-8',
+             'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8' }
+        
         # If source was not found, throw an exception to indicate that the algorithm
         # encountered a fatal error. The exception text can be any string, but in this
         # case we use the pre-built invalidSourceError method to return a standard
         # helper text for when a source cannot be evaluated
         if source is None:
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
-
+        fields = QgsFields()
+        
+        fields.append(QgsField("group_index", QVariant.Int))
+        fields.append(QgsField("value", QVariant.Int))
+        fields.append(QgsField("center", QVariant.String, len=255))
+        fields.append(QgsField("original_id", QVariant.Int))
         (sink, dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT,
             context,
-            source.fields(),
-            source.wkbType(),
-            source.sourceCrs()
+            fields,
+            QgsWkbTypes.Polygon,
+            QgsCoordinateReferenceSystem(4326)
         )
 
         # Send some information to the user
@@ -175,34 +258,35 @@ class RoutingPlus4GISIsochrones(QgsProcessingAlgorithm):
             # Stop the algorithm if cancel button has been clicked
             if feedback.isCanceled():
                 break
-
+            feedback.pushInfo(str(feature))
+            point = feature.geometry().asPoint()
+            transform = QgsCoordinateTransform(crs,
+                                   QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
+            point4326 = transform.transform(point)
+            #pointB4326 = transform.transform(pointB)
+            d = '{"locations":[['+str(point4326.x())+ ','+str(point4326.y()) + ']], "range":[' + dists + '],"range_type":"' + typ + '"}'
+            feedback.pushInfo(d)   
             # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
+            #sink.addFeature(feature, QgsFeatureSink.FastInsert)
+            response = requests.post(url, data=d, headers=h)
+            feedback.pushInfo(str(response.text)) 
+            fieldsBKG = QgsJsonUtils.stringToFields(json.dumps(response.json()))
+            featuresBKG = QgsJsonUtils.stringToFeatureList(json.dumps(response.json()), fieldsBKG)
+            #feedback.pushInfo(str(featuresBKG)) 
+            for fet in reversed(featuresBKG):
+                newFet = QgsFeature()
+                newFet.setGeometry(fet.geometry())
+                attrs = fet.attributes()
+                #feedback.pushInfo(str(attrs))
+                newFet.setAttributes([
+                    attrs[0],
+                    attrs[1],
+                    attrs[2],
+                    feature.id()
+                ])
+                sink.addFeature(newFet, QgsFeatureSink.FastInsert)
+            #feedback.pushInfo(str(type(featuresBKG)))
             # Update the progress bar
             feedback.setProgress(int(current * total))
 
-        # To run another Processing algorithm as part of this algorithm, you can use
-        # processing.run(...). Make sure you pass the current context and feedback
-        # to processing.run to ensure that all temporary layer outputs are available
-        # to the executed algorithm, and that the executed algorithm can send feedback
-        # reports to the user (and correctly handle cancellation and progress reports!)
-        if False:
-            buffered_layer = processing.run("native:buffer", {
-                'INPUT': dest_id,
-                'DISTANCE': 1.5,
-                'SEGMENTS': 5,
-                'END_CAP_STYLE': 0,
-                'JOIN_STYLE': 0,
-                'MITER_LIMIT': 2,
-                'DISSOLVE': False,
-                'OUTPUT': 'memory:'
-            }, context=context, feedback=feedback)['OUTPUT']
-
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
         return {self.OUTPUT: dest_id}
